@@ -6,20 +6,21 @@ for extracurricular activities at Mergington High School.
 """
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
 
 app = FastAPI(title="Mergington High School API",
-              description="API for viewing and signing up for extracurricular activities")
+              description="API for viewing and signing up for extracurricular activities and saving ideas")
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
 
-# In-memory activity database
+ # In-memory activity database
 activities = {
     "Chess Club": {
         "description": "Learn strategies and compete in chess tournaments",
@@ -77,15 +78,49 @@ activities = {
     }
 }
 
+# In-memory ideas database
+ideas = []
+
+# Pydantic model for idea
+class Idea(BaseModel):
+    title: str
+    description: str = ""
+
+
 
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
 
 
+
 @app.get("/activities")
 def get_activities():
     return activities
+
+# --- IDEAS ENDPOINTS ---
+@app.get("/ideas")
+def list_ideas():
+    """List all saved ideas"""
+    return ideas
+
+@app.post("/ideas")
+def add_idea(idea: Idea):
+    """Add a new idea"""
+    # Prevent duplicate titles
+    if any(existing["title"] == idea.title for existing in ideas):
+        raise HTTPException(status_code=400, detail="Idea with this title already exists")
+    ideas.append(idea.dict())
+    return {"message": f"Idea '{idea.title}' added"}
+
+@app.delete("/ideas/{title}")
+def remove_idea(title: str):
+    """Remove an idea by title"""
+    for i, existing in enumerate(ideas):
+        if existing["title"] == title:
+            ideas.pop(i)
+            return {"message": f"Idea '{title}' removed"}
+    raise HTTPException(status_code=404, detail="Idea not found")
 
 
 @app.post("/activities/{activity_name}/signup")
